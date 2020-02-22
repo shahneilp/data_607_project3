@@ -15,6 +15,7 @@ conn <- dbConnect(odbc(),
                   Database ="x",
                   UID ="x",
                   PWD = "x")
+
 ```
 
 # Verify Connectivity
