@@ -1,0 +1,253 @@
+---
+title: "Google Trends and Job Analysis on Data Science Skills"
+output:
+  html_document:
+    df_print: paged
+---
+
+## Introduction.
+
+The purpose of this notebook is to "quantify" how hot certain data science skills are by using two metrics.
+
+1. Google Trends
+2. Job Openings on Indeed and Monster via webscraping
+
+
+## Packages Involved
+
+Google Trends has a R based package called 'gtrendsR' that provides easy API access and rvest provides web scraping capabilities.  
+
+I will be using our good friend, tidyverse, to assist. 
+
+
+```{r}
+library(gtrendsR)
+library(tidyverse)
+library(ggplot2)
+library(reshape2)
+library(rvest)
+library(stringr)
+```
+
+
+## Part 1: Google Trend Analysis 
+
+Google is the world's most popuar search engine and has a feature called Google Trends that tracks via hits search term popularity. Using Google Trends is not a new concept and there is an abundant [literature](https://www.sciencedirect.com/science/article/pii/S0020025516300846) on how it can serve as an early indicator for prediction.
+
+
+## Brief Intro to gTrendsR
+
+GtrendsR accepts a keyword (can be column), geographical location, cookie parameters, language and time dimension as parameters--the full documentation can be found [here](https://cran.r-project.org/web/packages/gtrendsR/gtrendsR.pdf).
+
+For example--the following call (just the head for brevity) specified the key word "Python programming language" for the US region for a 5 year frame.
+
+```{r}
+output <- head(gtrends(keyword = 'Python programming language',
+         geo = "US",
+        time = "today+5-y")) 
+names(output)
+```
+
+
+The resultant is a list of dataframes, with categories of interest by time, country, region, demogrpahics, city and related topic. 
+
+To standardize results we will restrict our search to the "US" and focus on hits, or interest over time. 
+
+```{r}
+output$interest_over_time
+```
+
+The interest_over_time provides a hit score time-series for the search phrase which is normalized/scaled from 0-100 in terms of popularity. 
+
+Here is a quick example of hits time 
+
+
+```{r}
+ggplot(data=output$interest_over_time)+geom_line(aes(y=hits,x=date))+ggtitle('Python Programming Language Hits over Time')
+
+```
+
+## Generating our search 
+
+My methodology is to generate a list of key words to search from the [kaggle](https://www.kdnuggets.com/2019/09/core-hot-data-science-skills.html) data set, key words and generate our hit trends.
+
+I will do single searches to isolate just the keyword in question.
+
+
+## Keyword List
+
+1.Python Programming Language
+2.R Programming Language
+3.SQL Programming Language
+4.Pytorch
+5.Scala
+6.TensorFlow
+7.Apache Spark
+8.Hadoop
+9.Deep Learning
+10.MongoDB
+11.NLP Analysis
+12.Kaggle
+13.Unstructured Data
+14.Coding bootcamps
+
+```{r}
+
+keywords <- c('Python Programming Language','R Programming Language','SQL Programming Language','Pytorch','Scala','Apache Spark','Hadoop','Deep Learning','MongoDB','NLP Analysis','Kaggle','Unstructured Data','coding bootcamps')
+```
+
+
+## Generating DataFrame
+
+```{r}
+#generating a Date vector
+date<-select((gtrends(keyword = keywords[1],
+                   geo = "US",
+                   time = "today+5-y")$interest_over_time),date)
+
+
+data <-vector(mode = "list", length = length(keywords))
+n <-1
+for (i in keywords)
+{
+  print(n)
+  print(i)
+  data[[n]]<-select((gtrends(keyword = i,
+                  geo = "US",
+                  time = "today+5-y")$interest_over_time),hits)
+  n<-n+1
+}
+
+#Making Data Frame
+df <- data.frame(data)
+
+colnames(df) <-keywords
+
+df<-cbind(date,df)
+
+
+
+```
+
+
+We now have a dataframe with all our hit values.
+
+### Initial Analysis 
+
+Starting off with a boxplot of the Google Hits [need to fix axis]
+
+```{r}
+par(las=2)
+boxplot(df[2:length(df)],main='Google Hits')
+```
+
+and a summary statistics 
+
+```{r}
+summary(df[2:length(df)])
+```
+
+
+
+
+### Plotting
+
+Initially plotting these time-series reveals a noisy signal that is hard to decipher.
+
+```{r}
+tidydf <- melt(df, 'date')
+ggplot(tidydf, aes(x=date, y=value, color=variable)) + geom_line()+ xlab('Time')+ylab('Hits')+ggtitle('Google Trends Data Science')
+```
+
+
+One common technque when dealing with noisy data is to smooth it out via some sort of moving average--for simplicity we'll employ geo_smooth() which uses a [LOESS](https://en.wikipedia.org/wiki/Local_regression), which is a combination of moving average and regression, to fit the data.  
+
+
+
+```{r}
+tidydf <- melt(df, 'date')
+ggplot(tidydf, aes(x=date, y=value, color=variable)) + geom_smooth(se=FALSE)+ xlab('Time')+ylab('Hits')+ggtitle('Google Trends Data Science')
+```
+
+### Visual Comparison
+
+
+We have smoothed out these plots and visually we can see their trends over time--since Gtrends already normalizes all values from 0-100, we can direclty compare one term to another to gauge their popularity, which will be our proxy for interest.
+
+Let's first compare the three big programming languages, Python, R and SQL.
+
+```{r}
+ df %>% select(c(names(df)[1],names(df)[2],names(df)[3],names(df)[4]))  %>% melt('date') %>% ggplot(aes(x=date, y=value, color=variable)) + geom_smooth(se=FALSE)+ xlab('Time')+ylab('Hits')+ggtitle('Google Trends Data Science')
+```
+
+From this basic analysis we can see that
+
+1. Both Python and R had declining popularity beginning in 2015 but had a W shaped recovery, with Python being more popular overall, and more importantly finishing with higher popularity than in 2015. 
+
+2. Python/R popularity seems some what initially correlated/cointegrated that they have similar pattern and spread between hits but that narrows after 2018, with Python ultimately being more popular.
+
+3. SQL had the lowest overall popularity and ended 2020 with the same as 2015
+
+4. Pecuilarly all three languages had a hump mid 2018
+
+
+## Quantifying 
+
+
+
+
+## Part 2: Job Opening Analysis 
+
+Another easy proxy to determine how popular or in demand a certain data science skill is through the number of job openings--simply put more jobs would imply more demand. We will be using two popular job sites, **Indeed** and **Monster** to find out how many total job openings in the United States are available for each key word, paired with the term "data scientist'.
+
+
+## Scraping Methodlogy 
+
+Using our key word list we will loop and create the unique url strings for both Inded and Monster, and then pull the total job postings via specific html node tags. Some minor preprocessing will be required to convert things strings to numbers.
+
+In order to properly search for the jobs terms we will need to replace the spaces within them.
+
+```{r}
+# This code creates an empty list and then populates it with # of jobs from Indeed and Monster
+searchString <- ' '
+replacementString <- '+'
+keywords <-sub(searchString,replacementString,keywords)
+keywords <-sub(searchString,replacementString,keywords)
+Indeed <-list()
+Monster <-list()
+j<-1
+for (i in keywords)
+{
+  #Indeed Portion
+  url1='https://www.indeed.com/q-data-scientist-'
+  url2='-l-United-States-jobs.html'
+  fullpath=paste0(url1,i,url2)
+  total_jobs <- read_html(fullpath) %>% html_node('#searchCountPages') %>% html_text()
+  # Cleaning up strings
+  Indeed[[j]] <-(str_extract_all(total_jobs,"\\(?[0-9,.]+\\)?")[[1]][2])
+  
+  #Now the Monster Portion
+  url1='https://www.monster.com/jobs/search/?q=data-scientist-'
+  url2='&where=united-states'
+  fullpath=paste0(url1,i,url2)
+  total_jobs <- read_html(fullpath) %>% html_nodes("h2")  %>% html_text()
+  # Cleaning up strings
+  Monster[[j]] <-gsub("[()]", "",((str_extract_all(total_jobs[1],"\\(?[0-9,.]+\\)?"))[[1]][1]))
+  
+  j<-j+1
+}
+
+#Converting to numerics
+Monster <- as.numeric(Monster)
+Indeed <-x<-as.numeric(gsub("\\,", "", Indeed))
+jobdf <- data.frame(keywords,Indeed,Monster)
+jobdf <-pivot_longer(jobdf,-keywords)
+```
+
+## Plot Comparison
+
+Now that we have a dataframe populated with the Indeed and Monster job postings, it's easy to compare to see which terms are in demand.
+
+```{r}
+ggplot(jobdf,aes(keywords, value))+geom_bar(stat = "identity", aes(fill = name),position = 'dodge')+xlab('Key Words')+ylab('Total Job Openings')+ggtitle('Job Openings by Data Science Words')+coord_flip()
+```
