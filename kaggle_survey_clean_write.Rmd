@@ -26,7 +26,7 @@ library(stringr)
 Below is the bulk data file. We don't know to drag around all the data all the time so I'm going to split this dataframe up into subsets and clean them up for easy tidying downstream. 
 
 ```{r}
-file<-"/Users/jeffshamp/Documents/GitHub/cuny_msds/DATA_607/data/multiple_choice_responses.csv"
+file<-"https://raw.githubusercontent.com/Shampjeff/data_607_project3/dev/Data/multiple_choice_responses.csv"
 df<-read.csv(file = file,sep = ",", stringsAsFactors = F, na.strings =T)%>% 
   mutate_if(is.character, list(~na_if(.,""))) 
 ```
